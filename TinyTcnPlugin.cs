@@ -46,7 +46,7 @@ public sealed class TinyTcnPlugin :
 
 
     public string Name => "TinyTCN";
-    public string Version => "0.1";
+    public string Version => "0.2";
 
     private readonly HttpClient _httpClient = new HttpClient();
     private InferResponse _lastInference;
@@ -328,21 +328,144 @@ public sealed class TinyTcnPlugin :
 
     private string BuildInferenceCsv()
     {
-        var sb = new StringBuilder();
+        var ordered = _chart.Series["CSV"].Points
+            .Select(p => new { T = p.XValue, I = p.YValues[0] })
+            .OrderBy(p => p.T)
+            .ToList();
 
+        double[] times = ordered.Select(p => p.T).ToArray();
+        double[] intensity = ordered.Select(p => p.I).ToArray();
+
+        double[] smooth = SmoothEmaZeroPhaseTime(times, intensity, 1.0); // build a local version that uses double[] throughout
+        double[] slope = RollingSlope(times, smooth, windowSamples: 11);
+        slope = MovingAverage(slope, span: 7);
+
+        var sb = new StringBuilder();
         sb.AppendLine("t,I_fixed,I_smooth,slope,dx,dy");
 
-        foreach (var point in _chart.Series["CSV"].Points)
+        for (int i = 0; i < ordered.Count; i++)
         {
-            sb.AppendLine(
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0},{1},{1},0,0,0",
-                    point.XValue,
-                    point.YValues[0]));
+            sb.AppendLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "{0:F6},{1:F6},{2:F6},{3:F6},0,0",
+                times[i],
+                intensity[i],
+                smooth[i],
+                slope[i]));
         }
 
-        return sb.ToString();
+        string csvContents = sb.ToString();
+
+        // Debug dump to application root
+        string dumpPath = Path.Combine(Application.StartupPath, "dump.csv");
+        File.WriteAllText(dumpPath, csvContents, Encoding.UTF8);
+
+        return csvContents;
+    }
+
+    private static double[] SmoothEmaZeroPhaseTime(
+        double[] times,
+        double[] values,
+        double tauSec)
+    {
+        if (times == null)
+            throw new ArgumentNullException(nameof(times));
+
+        if (values == null)
+            throw new ArgumentNullException(nameof(values));
+
+        if (times.Length != values.Length)
+            throw new ArgumentException("times and values must have the same length");
+
+        int n = values.Length;
+
+        if (n == 0 || tauSec <= 0)
+            return values.ToArray();
+
+        // Forward EMA
+        var yf = new double[n];
+        yf[0] = values[0];
+
+        for (int i = 1; i < n; i++)
+        {
+            double dt = Math.Max(0.0, times[i] - times[i - 1]);
+            double a = 1.0 - Math.Exp(-dt / tauSec);
+
+            yf[i] = a * values[i] + (1.0 - a) * yf[i - 1];
+        }
+
+        // Backward EMA (zero phase)
+        var yb = new double[n];
+        yb[n - 1] = yf[n - 1];
+
+        for (int i = n - 2; i >= 0; i--)
+        {
+            double dt = Math.Max(0.0, times[i + 1] - times[i]);
+            double a = 1.0 - Math.Exp(-dt / tauSec);
+
+            yb[i] = a * yf[i] + (1.0 - a) * yb[i + 1];
+        }
+
+        return yb;
+    }
+
+    private double[] RollingSlope(double[] x, double[] y, int windowSamples)
+    {
+        var slope = new double[y.Length];
+        int half = Math.Max(1, windowSamples / 2);
+
+        for (int i = 0; i < y.Length; i++)
+        {
+            int a = Math.Max(0, i - half);
+            int b = Math.Min(y.Length - 1, i + half);
+
+            int n = b - a + 1;
+            if (n < 2)
+            {
+                slope[i] = 0;
+                continue;
+            }
+
+            double sx = 0, sy = 0, sxx = 0, sxy = 0;
+
+            for (int j = a; j <= b; j++)
+            {
+                sx += x[j];
+                sy += y[j];
+                sxx += x[j] * x[j];
+                sxy += x[j] * y[j];
+            }
+
+            double denom = n * sxx - sx * sx;
+            slope[i] = Math.Abs(denom) < 1e-12 ? 0 : (n * sxy - sx * sy) / denom;
+        }
+
+        return slope;
+    }
+
+    private double[] MovingAverage(double[] values, int span)
+    {
+        var output = new double[values.Length];
+        int half = Math.Max(1, span / 2);
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            int a = Math.Max(0, i - half);
+            int b = Math.Min(values.Length - 1, i + half);
+
+            double sum = 0;
+            int count = 0;
+
+            for (int j = a; j <= b; j++)
+            {
+                sum += values[j];
+                count++;
+            }
+
+            output[i] = count > 0 ? sum / count : values[i];
+        }
+
+        return output;
     }
 
     private void ApplyInference(string json)
