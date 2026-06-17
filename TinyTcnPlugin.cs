@@ -46,7 +46,7 @@ public sealed class TinyTcnPlugin :
 
 
     public string Name => "TinyTCN";
-    public string Version => "0.2";
+    public string Version => "0.3";
 
     private readonly HttpClient _httpClient = new HttpClient();
     private InferResponse _lastInference;
@@ -55,6 +55,9 @@ public sealed class TinyTcnPlugin :
     {
         _host = host;
         _host.AppendLog("TinyTCN", "Info", "TinyTCN plugin initialized");
+
+        // you can process any json fields here...
+
     }
 
     public void BuildUI()
@@ -315,6 +318,7 @@ public sealed class TinyTcnPlugin :
                     "Info",
                     "Inference complete");
             }
+
         }
         catch (Exception ex)
         {
@@ -363,10 +367,7 @@ public sealed class TinyTcnPlugin :
         return csvContents;
     }
 
-    private static double[] SmoothEmaZeroPhaseTime(
-        double[] times,
-        double[] values,
-        double tauSec)
+    private static double[] SmoothEmaZeroPhaseTime(double[] times, double[] values, double tauSec)
     {
         if (times == null)
             throw new ArgumentNullException(nameof(times));
@@ -670,9 +671,53 @@ public sealed class TinyTcnPlugin :
 
     #endregion
 
+    #region Commands
+
+    private void OpenShutter(string name)
+    {
+        // name = Ga1, In1, etc   
+        _host.ExecuteCommand($"Open({name})");
+    }
+
+    private void CloseShutter(string name)
+    {
+        // name = Ga1, In1, etc      
+        _host.ExecuteCommand($"Close({name})");
+    }
+
+    #endregion
+
     public void Run()
     {
+        // Fire and forget
+        // This starts the task and returns immediately
+        // The workbook is "complete" when the _host.MarkComplete() is called in RunAsync
+        _ = RunAsync();
     }
+
+    private async Task RunAsync()
+    {
+        string path = @"D:\UnicornOne\DataSetGenerator\CSV\flux_0.68.csv";
+
+        _inferButton.Enabled = false;
+
+        try
+        {
+            LoadCsvToChart(path);   // UI thread
+            await RunInference();   // async; resumes on UI thread unless configured otherwise
+            _host.MarkComplete();   // actually completes the workbook 
+        }
+        catch (Exception ex)
+        {
+            _host.AppendLog("TinyTCN", "Warning", ex.ToString());
+            _host.MarkComplete();   // unblock a failed workbook execution 
+        }
+        finally
+        {
+            _inferButton.Enabled = true;
+        }
+    }
+
 
     public void RequestCancel()
     {

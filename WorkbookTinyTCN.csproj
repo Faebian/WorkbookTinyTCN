@@ -1,25 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
-    <LangVersion>latest</LangVersion>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net472</TargetFramework>
+		<UseWindowsForms>true</UseWindowsForms>
+		<LangVersion>latest</LangVersion>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <Reference Include="UnicornOne.Abstractions">
-      <HintPath>C:\UnicornOne\UnicornOne.Abstractions.dll</HintPath>
-    </Reference>
+	<ItemGroup>
+		<Reference Include="UnicornOne.Abstractions">
+			<HintPath>C:\UnicornOne\UnicornOne.Abstractions.dll</HintPath>
+		</Reference>
 
-    <Reference Include="System" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Windows.Forms.DataVisualization" />
-    <Reference Include="System.Net.Http" />
-  </ItemGroup>
+		<Reference Include="Newtonsoft.Json">
+			<HintPath>C:\UnicornOne\Newtonsoft.Json.dll</HintPath>
+		</Reference>
 
-  <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-  </ItemGroup>
+		<Reference Include="System" />
+		<Reference Include="System.Drawing" />
+		<Reference Include="System.Windows.Forms" />
+		<Reference Include="System.Windows.Forms.DataVisualization" />
+		<Reference Include="System.Net.Http" />
+	</ItemGroup>
 
 </Project>
